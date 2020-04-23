@@ -11,9 +11,17 @@ flipRightMotor() in the setup() function. */
 Zumo32U4Motors motors;
 Zumo32U4ButtonA buttonA;
 Zumo32U4LCD lcd;
+LSM303 compass;
+L3G gyro;
+
 char sz[] = "Here; is some; sample;100;data;1.414;1020";
 String serialResponse = "";
-
+unsigned long previousMillis = 0;
+struct inputData
+{
+     int valueX;
+     int valueY;
+};
 void setup()
 {
   Serial.begin(115200);
@@ -21,43 +29,20 @@ void setup()
   //motors.flipLeftMotor(true);
   //motors.flipRightMotor(true);
 
-  // Wait for the user to press button A.
-  buttonA.waitForButton();
+  Wire.begin();
+  compass.init();
+  compass.enableDefault();
+  gyro.init();
+  gyro.enableDefault();
 
   // Delay so that the robot does not move away while the user is
   // still touching it.
   delay(1000);
 }
-
-void loop()
-{
-  if ( Serial.available()) {
-    lcd.clear();
-    serialResponse = Serial.readStringUntil('\r\n');
-
-    // Convert from String Object to String.
-    char buf[sizeof(sz)];
-    serialResponse.toCharArray(buf, sizeof(buf));
-    char *p = buf;
-    char *str;
-    int counter = 0;
-    int nJoyX;              // Joystick X input                     (-128..+127)
-    int nJoyY;              // Joystick Y input                     (-128..+127)
-    while ((str = strtok_r(p, ";", &p)) != NULL) { // delimiter is the semicolon
-      if(counter == 1) {
-        nJoyX = atoi(str);
-        lcd.print(str);
-        lcd.gotoXY(0, 1);
-        lcd.print((int)str);
-      }
-      if(counter == 2) {
-        nJoyY = atoi(str);
-
-      }
-      counter++;
-    }
-    
-    // OUTPUTS
+inputData convertXYDifferential(inputData in) {
+    int nJoyX = in.valueX;              // Joystick X input                     (-128..+127)
+    int nJoyY = in.valueY;              // Joystick Y input     
+   // OUTPUTS
     int     nMotMixL;           // Motor (left)  mixed output           (-128..+127)
     int     nMotMixR;           // Motor (right) mixed output           (-128..+127)
     
@@ -73,9 +58,8 @@ void loop()
     float   nMotPremixL;    // Motor (left)  premixed output        (-128..+127)
     float   nMotPremixR;    // Motor (right) premixed output        (-128..+127)
     int     nPivSpeed;      // Pivot Speed                          (-128..+127)
-    float   fPivScale;      // Balance scale b/w drive and pivot    (   0..1   )
-    
-    
+    float   fPivScale;      // Balance scale b/w drive and pivot(   0..1   )
+    inputData out;
     // Calculate Drive Turn output due to Joystick X input
     if (nJoyY >= 0) {
       // Forward
@@ -100,21 +84,59 @@ void loop()
     // Calculate final mix of Drive and Pivot
     nMotMixL = (1.0-fPivScale)*nMotPremixL + fPivScale*( nPivSpeed);
     nMotMixR = (1.0-fPivScale)*nMotPremixR + fPivScale*(-nPivSpeed);
-    
-    motors.setLeftSpeed(map(nMotMixL, -127, 127, -400, 400));  
-    motors.setRightSpeed(map(nMotMixR, -127, 127, -400, 400));  
+    out.valueX = nMotMixL;
+    out.valueY = nMotMixR;
+    return out;
+}
+void loop()
+{
+  unsigned long currentMillis = millis();
+  if ( Serial.available()) {
+    previousMillis = currentMillis;
+    lcd.clear();
+    serialResponse = Serial.readStringUntil('\r\n');
+
+    // Convert from String Object to String.
+    char buf[sizeof(sz)];
+    serialResponse.toCharArray(buf, sizeof(buf));
+    char *p = buf;
+    char *str;
+    int counter = 0;
+    int nJoyX;              // Joystick X input                     (-128..+127)
+    int nJoyY;              // Joystick Y input                     (-128..+127)
+    while ((str = strtok_r(p, ";", &p)) != NULL) { // delimiter is the semicolon
+      if(counter == 1) {
+        nJoyX = atoi(str);
+      }
+      if(counter == 2) {
+        nJoyY = atoi(str);
+      }
+      counter++;
+    }
+    inputData in = { nJoyX, nJoyY };
+    inputData out = convertXYDifferential(in);
+   
+    motors.setLeftSpeed(map(out.valueX, -127, 127, -400, 400));  
+    motors.setRightSpeed(map(out.valueY, -127, 127, -400, 400));  
   }
-  // Run left motor forward.
-  ledYellow(1);
-//  for (int speed = 0; speed <= 400; speed++)
-//  {
-//    motors.setLeftSpeed(speed);
-//    delay(2);
-//  }
-//  for (int speed = 400; speed >= 0; speed--)
-//  {
-//    motors.setLeftSpeed(speed);
-//    delay(2);
-//  }
+  if(currentMillis - previousMillis >= 100)
+  {
+    lcd.clear();
+    motors.setRightSpeed(0);  
+    motors.setLeftSpeed(0);  
+    lcd.print("No recent commands");
+  }
+  compass.read();
+  gyro.read();
+  float Pi = 3.14159;
+ 
+  // Calculate the angle of the vector y,x
+  //float heading = (atan2(compass.m.y,compass.m.x) * 180) / Pi;
+  float heading = compass.heading();
+  // Normalize to 0-360
+
+  Serial.print("heading;");
+  Serial.println(heading);
+
   delay(10);
 }

@@ -2,11 +2,13 @@ package me.aflak.libraries;
 
 import android.graphics.Color;
 import android.hardware.usb.UsbDevice;
+import android.net.wifi.WifiManager;
 import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.text.format.Formatter;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
@@ -37,7 +39,8 @@ public class MainActivity extends AppCompatActivity implements ArduinoListener {
     private Arduino arduino;
     private TextView textView;
     private EditText editText;
-    private SocketClient sc = new SocketClient( new URI( "ws://172.19.131.80:9000" ), this);
+    private TextView textView2;
+    private SocketClient sc = new SocketClient( new URI( "ws://192.168.1.94:9000" ), this);
 
     public MainActivity() throws URISyntaxException {
     }
@@ -48,8 +51,11 @@ public class MainActivity extends AppCompatActivity implements ArduinoListener {
         setContentView(R.layout.activity_main);
         //msgList = findViewById(R.id.msgList);
         //edMessage = findViewById(R.id.edMessage);
-
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        String ip = Formatter.formatIpAddress(wm.getConnectionInfo().getIpAddress());
         textView = findViewById(R.id.textView);
+        textView2 = findViewById(R.id.textView2);
+        textView2.setText(ip);
         textView.setMovementMethod(new ScrollingMovementMethod());
         editText = (EditText) findViewById(R.id.editText);
         arduino = new Arduino(this);
@@ -87,12 +93,12 @@ public class MainActivity extends AppCompatActivity implements ArduinoListener {
         }
         if(str.equals("left;"))
         {
-            x = -100;
+            x = -50;
             y = 0;
         }
         if(str.equals("right;"))
         {
-            x = 100;
+            x = 50;
             y = 0;
         }
         if(str.equals("leftup;"))
@@ -117,7 +123,8 @@ public class MainActivity extends AppCompatActivity implements ArduinoListener {
         arduino.send(sb.toString().getBytes());
         display(str + " : Socket sent: " + x + ", " + y);
     }
-    public void onClick(View view) {
+    public void onClick(View view) throws URISyntaxException {
+        sc = new SocketClient( new URI( "ws://" + editText.getText() +":9000" ), this);
         sc.connect();
         display("Button clicked");
     }
@@ -148,6 +155,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoListener {
     @Override
     public void onArduinoMessage(byte[] bytes) {
         display("> "+new String(bytes));
+        sc.send(bytes);
     }
 
     @Override

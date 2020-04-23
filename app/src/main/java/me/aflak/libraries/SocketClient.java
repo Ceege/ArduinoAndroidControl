@@ -24,6 +24,9 @@ public class SocketClient extends WebSocketClient {
     public SocketClient( URI serverUri, Map<String, String> httpHeaders ) {
         super(serverUri, httpHeaders);
     }
+    public void sendMessage(String str) {
+        send(str);
+    }
 
     @Override
     public void onOpen( ServerHandshake handshakedata ) {
